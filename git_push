@@ -1,7 +1,0 @@
-#!/bin/bash
-
-NOW=$(date +"v%m%y%d")
-
-git add -A
-git commit -m "${NOW}"
-git push

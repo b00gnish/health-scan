@@ -1,0 +1,312 @@
+#!/bin/bash
+
+now=$(/bin/date +"%m-%d-%Y-%T")
+red='\e[31m'
+green='\e[32m'
+blue='\e[34m'
+cyan='\e[36m'
+magenta='\e[35m'
+greyBack='\e[100m'
+redBack='\e[101m'
+greenBack='\e[102m'
+bold='\e[1m'
+dim='\e[2m'
+blink='\e[5m'
+underline='\e[4m'
+nc='\e[0m'
+
+# Determine if piping
+if [[ -t 1 ]]; then 
+  :
+else 
+  red=''
+  green=''
+  blue=''
+  cyan=''
+  magenta=''
+  greyBack=''
+  redBack=''
+  greenBack=''
+  bold=''
+  dim=''
+  blink=''
+  underline=''
+  nc=''
+fi
+
+# Start scanner
+printf "\n\n\t\t${greyBack}${green}Starting Scanner${nc}\n\n"
+
+# Determine if root
+if [[ $(whoami) != "root" ]]; then
+  printf "\n${redBack}${underline}Script requires root user${nc}\n\n"
+  exit
+fi
+
+# Determine distribution
+centos=$(cat /etc/redhat-release 2> /dev/null)
+ubuntu=$(lsb_release -a 2> /dev/null)
+printf "\n${magenta}${underline}Scanning distribution${nc}\n"
+if [[ ${ubuntu} ]]; then
+  printf "$(lsb_release -a 2> /dev/null)"
+  osCheck="ubuntu"
+else
+  if [[ ${centos} ]]; then
+    printf "Distro:\t\t$(cat /etc/redhat-release 2> /dev/null)\n"
+    osCheck="centos"
+  else
+      printf "Distro:\t\tNeither Ubuntu or Centos\n"
+  fi
+fi
+
+# Gather server specifications
+printf "\n\n\t\t${greyBack}${green}Gathering server specifications${nc}\n\n"
+
+# Uptime
+printf "\n${magenta}${underline}Uptime${nc}\n"
+upTime=$(uptime|awk '{for(i=3;i<=4;i++)printf "%s ",$i;printf "\n"}'|cut -d "," -f1)
+printf "${upTime}\n"
+
+# Cpu
+printf "\n${magenta}${underline}CPU${nc}\n"
+cpuModel=$(cat /proc/cpuinfo|grep "model name"|cut -d ":" -f2|sed -n '1p'|sed 's/^.//')
+printf "${cpuModel}\n"
+
+# Load
+printf "\n${magenta}${underline}Server load${nc}\n"
+serverLoad=$(cat /proc/loadavg|awk '{for(i=1;i<=3;i++)printf "%s ",$i;printf "\n"}')
+printf "${serverLoad}\n"
+
+# Processes
+printf "\n${magenta}${underline}Running processes${nc}\n"
+procCheck=$(ps aux|wc -l)
+printf "${procCheck}\n"
+
+# Connection Check
+printf "\n${magenta}${underline}Current web connections${nc}\n"
+netUnsecure=$(netstat -plan|grep :80|wc -l)
+netSecure=$(netstat -plan|grep :443|wc -l)
+printf "http (unsecure):\t${netUnsecure}\n"
+printf "https  (secure):\t${netSecure}\n"
+
+# Memory
+printf "\n${magenta}${underline}Memory utilization${nc}\n"
+memoryUsage=$(free -m|grep -B 1 -i "mem:")
+swapUsage=$(free -m|grep -i "swap:")
+printf "${memoryUsage}\n"
+printf "${swapUsage}\n"
+
+# Disk Space
+printf "\n${magenta}${underline}Disk utilization${nc}\n"
+diskSpace=$(df -h)
+echo -e "${diskSpace}"
+
+# I/O
+printf "\n${magenta}${underline}I/O${nc}\n"
+ioCheck=$(iostat -dmx 1 -c 5 2> /dev/null)
+if [[ $? -eq 1 ]]; then
+  echo -e "${redBack}There was an error capturing I/O performance." \
+  "Please ensure that sysstat is installed.${nc}"
+fi
+printf "${ioCheck}\n"
+
+# Web server configuration options
+apacheScan () {
+printf "\n${magenta}${underline}Scanning apache${nc}\n"
+apacheDir=$(apachectl -V|grep HTTPD_ROOT|cut -d "=" -f2|tr -d '\"')
+apacheFile=$(apachectl -V|grep SERVER_CONFIG_FILE|cut -d "=" -f2|tr -d '\"')
+apacheVers=$(apachectl -V|grep "Server version"|cut -d ":" -f2|sed 's/^.//')
+apacheConf=$(printf ${apacheDir}\/${apacheFile})
+printf "Apache Version:\t${apacheVers}\n"
+printf "Configuration File:\t${apacheConf}\n"
+
+apacheList=(
+  'KeepAlive'
+  'KeepAliveTimeout'
+  'MaxKeepAliveRequests'
+  'Timeout'
+  'User'
+  'Group'
+  'TraceEnable'
+  'ServerSignature'
+  'StartServers'
+  'ServerLimit'
+  'MaxRequestWorkers'
+  'MaxConnectionsPerChild'
+  'RewriteEngine'
+  'Listen'
+  'SSLCipherSuite'
+  'SSLProtocol'
+)
+
+for setting in "${apacheList[@]}"; do
+  grep -wR -m1 ${setting} ${apacheConf}|sed '/^#/d'|tr '\r\ ' '\t'
+done
+printf "\n"
+}
+
+# Mysql review
+mysqlList=(
+  'datadir'
+  'default_storage_engine'
+  'default_tmp_storage_engine'
+  'have_ssl'
+  'innodb_buffer_pool_instances'
+  'innodb_buffer_pool_size'
+  'innodb_file_per_table'
+  'innodb_flush_log_at_trx_commit'
+  'innodb_flush_method'
+  'innodb_log_buffer_size'
+  'innodb_log_files_in_group'
+  'innodb_read_io_threads'
+  'innodb_write_io_threads'
+  'join_buffer_size'
+  'key_buffer_size'
+  'max_allowed_packet'
+  'max_connect_errors'
+  'max_connections'
+  'max_heap_table_size'
+  'open_files_limit'
+  'query_cache_limit'
+  'query_cache_size'
+  'query_cache_type'
+  'read_buffer_size'
+  'read_rnd_buffer_size'
+  'skip-innodb_doublewrite'
+  'sort_buffer_size'
+  'table_open_cache'
+  'thread_cache_size'
+  'tmp_table_size'
+  'wait_timeout'
+)
+
+mysqlScan () {
+  printf "\n${magenta}${underline}Scanning msyql${nc}\n"
+  mysql -s -e 'show global variables;' 2> /dev/null|grep -E $(printf '%s|' "${mysqlList[@]}"|sed s'/.$//')
+  if [[ $? -eq 1 ]]; then
+    echo -e "${redBack}There was an error capturing mysql settings." \
+    "Please ensure that root can access mysql.${nc}"
+  fi
+  printf "\n"
+}
+
+# nginx review
+nginxScan () {
+  printf "\n${magenta}${underline}Scanning nginx${nc}\n"
+  nginx -V
+  printf "\n"
+}
+
+# Varnish review
+varnishScan () {
+  printf "\n${magenta}${underline}Scanning varnish${nc}\n"
+  cat /etc/varnish/default.vcl
+  if [[ $? -eq 1 ]]; then
+    echo -e "${redBack}There was an error capturing varnish settings${nc}"
+  fi
+  printf "\n"
+}
+
+# Redis review
+redisScan () {
+  printf "\n${magenta}${underline}Scanning redis${nc}\n"
+  redisPort=$(ss -l -n -p|grep redis|cut -d ":" -f2|awk '{print $1}')
+  if [[ -n ${redisPort} ]]; then
+    printf "${cyan}Redis listening on ports:${nc}\n${redisPort}"
+  fi
+  printf "\n"
+}
+
+# Determine what services are running
+printf "\n\n\t\t${greyBack}${green}Scanning running services${nc}\n\n"
+serviceList=(
+  'apache2'
+  'httpd'
+  'nginx'
+  'varnish'
+  'redis'
+  'mysqld'
+)
+
+eightyCheck () {
+  eightyPort=$(lsof -i :80 -S|sed -n '2p'|awk '{print $1}')
+  ffthreePort=$(lsof -i :443 -S|sed -n '2p'|awk '{print $1}')
+  case ${serviceCheck} in
+    ${eightyPort})
+      printf "${cyan}Listening on port 80:${nc}\n${serviceCheck}\n"
+      ;;
+    ${ffthreePort})
+      printf "${cyan}Listening on port 443:${nc}\n${serviceCheck}\n"
+      ;;
+  esac
+}
+
+serviceDet () {
+  serviceCheck=$(lsof|grep -w -m1 ${1}|awk '{print $1}'|tr '[:upper:]' '[:lower:]')
+  cpanelCheck=$(/usr/local/cpanel/cpanel -V 2> /dev/null)
+  if [[ -n ${cpanelCheck} && ${1} == "apache2" ]]; then
+    serviceCheck="duplicate"
+  fi
+  if [[ -n ${serviceCheck} ]]; then
+    case ${serviceCheck} in
+      apache2*)
+        apacheScan ${serviceCheck}
+        eightyCheck
+        ;;
+      httpd*)
+        apacheScan ${serviceCheck}
+        eightyCheck
+        ;;
+      nginx*)
+        nginxScan
+        eightyCheck
+        ;;
+      varnish*)
+        varnishScan
+        eightyCheck
+        ;;
+      redis*)
+        redisScan
+        eightyCheck
+        ;;
+      mysqld*)
+        mysqlScan
+        ;;
+    esac
+  fi
+}
+
+for service in "${serviceList[@]}"; do
+  serviceDet ${service}
+done
+
+# PHP review
+printf "\n${magenta}${underline}Scanning php ini${nc}\n"
+phpiniList=(
+  'allow_url_fopen'
+  'allow_url_include'
+  'enable_dl'
+  'expose_php'
+  'file_uploads'
+  'html_errors'
+  'log_errors'
+  'max_execution_time'
+  'max_file_uploads'
+  'max_input_time'
+  'max_input_vars'
+  'memory_limit'
+  'post_max_size'
+  'upload_max_filesize'
+  'variables_order'
+  )
+
+phpiniScan () {
+  php -i|grep -w -m1 ${1}
+}
+
+for setting in "${phpiniList[@]}"; do
+  phpiniScan ${setting}
+done
+
+printf "\n${magenta}${underline}Scanning php modules${nc}\n"
+php -m

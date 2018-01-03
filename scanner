@@ -16,9 +16,9 @@ underline='\e[4m'
 nc='\e[0m'
 
 # Determine if piping
-if [[ -t 1 ]]; then 
+if [[ -t 1 ]]; then
   :
-else 
+else
   red=''
   green=''
   blue=''

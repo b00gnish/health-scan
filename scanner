@@ -1,6 +1,9 @@
 #!/bin/bash
 
-now=$(/bin/date +"%m-%d-%Y-%T")
+now () {
+  date +"%m-%d-%Y-%T"
+}
+
 red='\e[31m'
 green='\e[32m'
 blue='\e[34m'
